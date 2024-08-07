@@ -574,7 +574,7 @@ mod internal {
                     str_to_nsstr("AVCaptureDeviceTypeBuiltInTrueDepthCamera")
                 }
                 AVCaptureDeviceType::External => {
-                    str_to_nsstr("AVCaptureDeviceTypeExternal")
+                    str_to_nsstr("AVCaptureDeviceTypeContinuityCamera")
                 }
                 AVCaptureDeviceType::ContinuityCamera => {
                     str_to_nsstr("AVCaptureDeviceTypeContinuityCamera")
