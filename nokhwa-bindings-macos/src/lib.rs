@@ -18,8 +18,6 @@
 // whatever is written here will induce horrors uncomprehendable.
 // save yourselves. write apple code in swift and bind it to rust.
 
-// <some change so we can call this 0.10.4>
-
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
@@ -211,7 +209,7 @@ mod internal {
     use block::ConcreteBlock;
     use cocoa_foundation::{
         base::Nil,
-        foundation::{NSArray, NSDictionary, NSInteger, NSString, NSUInteger},
+        foundation::{NSArray, NSInteger, NSString, NSUInteger},
     };
     use core_media_sys::{
         kCMPixelFormat_24RGB, kCMPixelFormat_422YpCbCr8_yuvs,
@@ -516,7 +514,8 @@ mod internal {
             AVCaptureDeviceType::WideAngle,
             AVCaptureDeviceType::Telephoto,
             AVCaptureDeviceType::TrueDepth,
-            AVCaptureDeviceType::ExternalUnknown,
+            AVCaptureDeviceType::External,
+            AVCaptureDeviceType::ContinuityCamera,
         ])?
         .devices())
     }
@@ -546,7 +545,8 @@ mod internal {
         UltraWide,
         Telephoto,
         TrueDepth,
-        ExternalUnknown,
+        External,
+        ContinuityCamera,
     }
 
     impl From<AVCaptureDeviceType> for *mut Object {
@@ -571,8 +571,11 @@ mod internal {
                 AVCaptureDeviceType::TrueDepth => {
                     str_to_nsstr("AVCaptureDeviceTypeBuiltInTrueDepthCamera")
                 }
-                AVCaptureDeviceType::ExternalUnknown => {
-                    str_to_nsstr("AVCaptureDeviceTypeExternalUnknown")
+                AVCaptureDeviceType::External => {
+                    str_to_nsstr("AVCaptureDeviceTypeExternal")
+                }
+                AVCaptureDeviceType::ContinuityCamera => {
+                    str_to_nsstr("AVCaptureDeviceTypeContinuityCamera")
                 }
             }
         }
@@ -812,7 +815,8 @@ mod internal {
             AVCaptureDeviceDiscoverySession::new(vec![
                 AVCaptureDeviceType::UltraWide,
                 AVCaptureDeviceType::Telephoto,
-                AVCaptureDeviceType::ExternalUnknown,
+                AVCaptureDeviceType::External,
+                AVCaptureDeviceType::ContinuityCamera,
                 AVCaptureDeviceType::Dual,
                 AVCaptureDeviceType::DualWide,
                 AVCaptureDeviceType::Triple,
@@ -995,14 +999,15 @@ mod internal {
                         msg_send![format.internal, videoSupportedFrameRateRanges]
                     }) {
                         let max_fps: f64 = unsafe { msg_send![range.inner, maxFrameRate] };
-                        // Older Apple cameras (i.e. iMac 2013) return 29.97000002997 as FPS.
-                        if (f64::from(descriptor.frame_rate()) - max_fps).abs() < 0.999 {
+
+                        if (f64::from(descriptor.frame_rate()) - max_fps).abs() < 0.01 {
                             selected_range = range.inner;
                             break;
                         }
                     }
                 }
             }
+
             if selected_range.is_null() || selected_format.is_null() {
                 return Err(NokhwaError::SetPropertyError {
                     property: "CameraFormat".to_string(),
@@ -2276,28 +2281,8 @@ mod internal {
             };
             Ok(())
         }
-
-        pub fn set_frame_format(&self, format: FrameFormat) -> Result<(), NokhwaError> {
-            let cmpixelfmt = match format {
-                FrameFormat::YUYV => kCMPixelFormat_422YpCbCr8_yuvs,
-                FrameFormat::MJPEG => kCMVideoCodecType_JPEG,
-                FrameFormat::GRAY => kCMPixelFormat_8IndexedGray_WhiteIsZero,
-                FrameFormat::NV12 => kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange,
-                FrameFormat::RAWRGB => kCMPixelFormat_24RGB,
-            };
-            let obj = CFNumber::from(cmpixelfmt as i32);
-            let obj = obj.as_CFTypeRef() as *mut Object;
-            let key = unsafe { kCVPixelBufferPixelFormatTypeKey } as *mut Object;
-            let dict = unsafe { NSDictionary::dictionaryWithObject_forKey_(nil, obj, key) };
-            let _: () = unsafe { msg_send![self.inner, setVideoSettings:dict] };
-            Ok(())
-        }
     }
 
-    use cocoa_foundation::base::nil;
-    use core_foundation::base::TCFType;
-    use core_foundation::number::CFNumber;
-    use core_video_sys::kCVPixelBufferPixelFormatTypeKey;
     impl Default for AVCaptureVideoDataOutput {
         fn default() -> Self {
             let cls = class!(AVCaptureVideoDataOutput);
